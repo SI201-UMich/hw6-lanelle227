@@ -134,8 +134,29 @@ def get_longest_lifespan_breed(cache_file):
         A tuple (breed_name, max_lifespan_integer) for the winning breed, OR the
         string "No breeds found" if no breed in the cache has a life.max value.
     """
-    pass
+    cache = load_json(cache_file)
+    longest_breed = None
+    longest_lifespan = None 
+    for entry in cache.values():
+        data = entry.get("data", {})
+        
+        attributes = data.get("attributes", {})
+        name = attributes.get("name")
+        life = attributes.get("life", {})
+        max_life = life.get("max")
 
+        if isinstance(max_life, int) and isinstance(name, str):
+            if longest_lifespan is None or max_life > longest_lifespan:
+                longest_breed = name
+                longest_lifespan = max_life
+            elif max_life == longest_lifespan and name < longest_breed:
+                longest_breed = name
+
+    if longest_breed is None:
+        return "No breeds found"
+
+    return (longest_breed, longest_lifespan)
+        
 
 def get_groups_above_cutoff(cutoff, cache_file):
     """
@@ -153,7 +174,29 @@ def get_groups_above_cutoff(cutoff, cache_file):
     RETURNS:
         A dictionary {group_uuid: count} for groups with count >= cutoff only.
     """
-    pass
+    cache = load_json(cache_file)
+    group_counts = {}
+
+    for entry in cache.values():
+        data = entry.get("data", {})
+        relationships = data.get("relationships", {})
+        group = relationships.get("group", {})
+        group_data = group.get("data", {})
+        group_id = group_data.get("id")
+
+        if group_id is not None:
+            if group_id in group_counts:
+                group_counts[group_id] += 1
+            else:
+                group_counts[group_id] = 1
+
+    result = {}
+
+    for group_id in group_counts:
+        if group_counts[group_id] >= cutoff:
+            result[group_id] = group_counts[group_id]
+
+    return result
 
 
 # Extra Credit
@@ -177,7 +220,55 @@ def recommend_breeds_in_same_group(breed_name, cache_file):
             "No group information available for '{breed_name}'."  (no group id)
             "No recommendations found based on '{breed_name}'."  (no other breeds in that group)
     """
+    cache = load_json(cache_file)
 
+    if cache == {}:
+        return "No breed data found in cache."
+
+    target_group_id = None
+    target_name = None
+
+    for entry in cache.values():
+        data = entry.get("data", {})
+        attributes = data.get("attributes", {})
+        name = attributes.get("name")
+
+        if isinstance(name, str) and name.lower() == breed_name.lower():
+            target_name = name
+            relationships = data.get("relationships", {})
+            group = relationships.get("group", {})
+            group_data = group.get("data", {})
+            target_group_id = group_data.get("id")
+            break
+
+    if target_name is None:
+        return f"'{breed_name}' is not in the cache."
+
+    if target_group_id is None:
+        return f"No group information available for '{breed_name}'."
+
+    recommendations = []
+
+    for entry in cache.values():
+        data = entry.get("data", {})
+        attributes = data.get("attributes", {})
+        name = attributes.get("name")
+
+        relationships = data.get("relationships", {})
+        group = relationships.get("group", {})
+        group_data = group.get("data", {})
+        group_id = group_data.get("id")
+
+        if group_id == target_group_id and isinstance(name, str):
+            if name.lower() != breed_name.lower():
+                recommendations.append(name)
+
+    recommendations.sort()
+
+    if recommendations == []:
+        return f"No recommendations found based on '{breed_name}'."
+
+    return recommendations
 
 class TestHomeworkDogAPI(unittest.TestCase):
     def setUp(self):
@@ -401,7 +492,7 @@ class TestHomeworkDogAPI(unittest.TestCase):
     # -------------------------
     # extra credit - uncomment tests below to evaluate extra credit function
     # -------------------------
-    """
+    
     def test_recommend_breeds_in_same_group_empty_cache(self):
         create_cache({}, self.test_cache_file)
         self.assertEqual(
@@ -506,7 +597,7 @@ class TestHomeworkDogAPI(unittest.TestCase):
             recommend_breeds_in_same_group("breed a", self.test_cache_file),
             ["Breed B", "Breed Z"],
         )
-    """
+    
 
 
 if __name__ == "__main__":
